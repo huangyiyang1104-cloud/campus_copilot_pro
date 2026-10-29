@@ -218,3 +218,13 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Milvus Lite 本地数据文件
+backend/data/
+
+# 本地编辑器 / 工具配置
+.vscode/settings.json
+.codebuddy/settings.local.json
+
+# 临时脚本
+tempCodeRunnerFile.bat

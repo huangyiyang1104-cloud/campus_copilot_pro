@@ -1,0 +1,117 @@
+:root {
+  --bg-deep: #070b18;
+  --text-main: #e9ecf8;
+  --text-muted: #8d97b8;
+  --stroke: rgba(255, 255, 255, 0.08);
+  --panel: rgba(255, 255, 255, 0.045);
+  --grad: linear-gradient(135deg, #6366f1 0%, #a855f7 52%, #ec4899 100%);
+  --radius-lg: 20px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  font-family: 'PingFang SC', 'Microsoft YaHei', 'Inter', system-ui, sans-serif;
+  color: var(--text-main);
+  background-color: var(--bg-deep);
+  background-image:
+    radial-gradient(60rem 60rem at 8% -10%, rgba(99, 102, 241, 0.28), transparent 60%),
+    radial-gradient(50rem 50rem at 92% 0%, rgba(168, 85, 247, 0.22), transparent 60%),
+    radial-gradient(60rem 60rem at 50% 120%, rgba(236, 72, 153, 0.16), transparent 60%);
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* ---------- 通用样式 ---------- */
+.glass {
+  background: var(--panel);
+  border: 1px solid var(--stroke);
+  border-radius: var(--radius-lg);
+  backdrop-filter: blur(18px);
+}
+
+.gradient-text {
+  background: var(--grad);
+  background-clip: text;
+  -webkit-background-clip: text;
+  color: transparent;
+}
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  height: 100%;
+  min-height: 0;
+}
+
+.page-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.page-title {
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+}
+
+.page-sub {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+/* ---------- 滚动条 ---------- */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+}
+
+/* ---------- 动画 ---------- */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.rise {
+  animation: rise 0.45s ease both;
+}
+
+/* ---------- Element Plus 微调 ---------- */
+.el-button--primary {
+  background-image: var(--grad);
+  border: none;
+}
+
+.el-button--primary:hover,
+.el-button--primary:focus {
+  filter: brightness(1.08);
+}
+
+.el-progress-bar__inner {
+  background-image: var(--grad);
+}

@@ -1,0 +1,42 @@
+# ---------- Web 框架 ----------
+fastapi==0.115.6
+uvicorn[standard]==0.34.0
+python-multipart==0.0.20
+websockets==14.1
+
+# ---------- 配置 / 校验 ----------
+pydantic==2.10.4
+pydantic-settings==2.7.0
+python-dotenv==1.0.1
+
+# ---------- 数据库 / 缓存 / 向量库 ----------
+sqlalchemy==2.0.36
+aiomysql==0.2.0
+pymysql==1.1.1
+alembic==1.14.0
+redis==5.2.1
+pymilvus==2.6.17
+milvus-lite==3.2.2
+jieba==0.42.1
+rank-bm25==0.2.2
+
+# ---------- AI & 编排 ----------
+langchain==0.3.30
+langchain-core==0.3.86
+langchain-community==0.3.27
+langchain-openai==0.3.35
+langchain-text-splitters==0.3.11
+langgraph==0.4.10
+mcp==1.12.4
+langchain-mcp-adapters==0.1.14
+
+# ---------- 文件存储 / 异步任务 ----------
+oss2==2.19.1
+celery==5.6.3
+pypdf==6.21.4
+
+# ---------- 工具 ----------
+httpx==0.28.1
+loguru==0.7.3
+python-jose[cryptography]==3.3.0
+passlib[bcrypt]==1.7.4
