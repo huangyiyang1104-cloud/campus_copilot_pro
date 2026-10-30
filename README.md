@@ -230,6 +230,10 @@ npm run dev
 - **没有限流**：登录、聊天、上传都还没有做频率控制，公网部署前需要补。
 - **没有自动化测试/CI**：目前以接口脚本和手工流程验证为主。
 
+## 压测
+
+项目内置 HTTP 读写、SSE 对话、资料并发入库三个压测脚本，使用方式与本次实测结果见 [`backend/tests/load/README.md`](backend/tests/load/README.md)。
+
 ## 开发命令
 
 ```bash
