@@ -9,6 +9,7 @@ import {
   streamChat,
   type ChatMessageItem,
 } from '@/api/chat'
+import { useSpeechStore } from '@/stores/speech'
 
 export interface Message {
   id: number
@@ -83,6 +84,7 @@ export const useChatStore = defineStore('chat', () => {
 
   /** 页面加载时从 MySQL 拉会话列表，并恢复上次选中的会话 */
   async function loadConversations() {
+    useSpeechStore().stop()
     loading.value = true
     try {
       const rows = await fetchConversations()
@@ -138,6 +140,7 @@ export const useChatStore = defineStore('chat', () => {
   async function selectConversation(id: number) {
     if (sending.value) return
 
+    useSpeechStore().stop()
     activeId.value = id
     rememberActive(id)
     await loadMessages(id)
@@ -146,6 +149,7 @@ export const useChatStore = defineStore('chat', () => {
   async function removeConversation(id: number) {
     if (sending.value) return
 
+    useSpeechStore().stop()
     await deleteConversationApi(id)
     conversations.value = conversations.value.filter((item) => item.id !== id)
 
@@ -159,7 +163,7 @@ export const useChatStore = defineStore('chat', () => {
 
   async function send(text: string) {
     const question = text.trim()
-    if (!question || sending.value) return
+    if (!question || sending.value || loading.value) return
 
     let conversation = activeConversation.value
     if (!conversation) conversation = await createConversation()
@@ -185,15 +189,21 @@ export const useChatStore = defineStore('chat', () => {
     target.updatedAt = Date.now()
     sending.value = true
 
+    const speech = useSpeechStore()
+    speech.begin()
+
     try {
       const done = await streamChat(
         { conversation_id: target.id, message: question },
         (delta) => {
           reply.content += delta
+          speech.feed(delta)
         },
       )
       if (done?.title) target.title = done.title
+      speech.end()
     } catch (error) {
+      speech.stop()
       // 一个字都没收到就把空气泡去掉
       if (!reply.content) {
         target.messages = target.messages.filter((item) => item.id !== reply.id)

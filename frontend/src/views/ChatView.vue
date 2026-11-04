@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Delete, Expand, Fold, MagicStick, Plus, Promotion } from '@element-plus/icons-vue'
 
@@ -8,9 +8,11 @@ import MarkdownContent from '@/components/MarkdownContent.vue'
 import { suggestions } from '@/mock/chat'
 import { useAuthStore } from '@/stores/auth'
 import { useChatStore, type Conversation } from '@/stores/chat'
+import { useSpeechStore } from '@/stores/speech'
 
 const chat = useChatStore()
 const auth = useAuthStore()
+const speech = useSpeechStore()
 
 const input = ref('')
 const listRef = ref<HTMLElement | null>(null)
@@ -32,7 +34,7 @@ async function scrollToBottom() {
 
 async function send(text?: string) {
   const content = (text ?? input.value).trim()
-  if (!content || chat.sending) return
+  if (!content || chat.sending || chat.loading) return
   input.value = ''
 
   try {
@@ -69,6 +71,7 @@ async function removeConversation(conversation: Conversation) {
 }
 
 async function newConversation() {
+  if (chat.loading) return
   try {
     await chat.createConversation()
     await scrollToBottom()
@@ -78,7 +81,7 @@ async function newConversation() {
 }
 
 async function openConversation(id: number) {
-  if (chat.sending) return
+  if (chat.sending || chat.loading) return
   try {
     await chat.selectConversation(id)
   } catch (error) {
@@ -104,6 +107,8 @@ watch(
   () => chat.messages.map((item) => item.content).join('').length,
   scrollToBottom,
 )
+
+onBeforeUnmount(() => speech.stop())
 </script>
 
 <template>
@@ -122,6 +127,9 @@ watch(
         </div>
         <div class="head-right">
           <span class="online"><i />在线</span>
+          <el-button text @click="speech.toggle()">
+            {{ speech.enabled ? '语音开' : '语音关' }}
+          </el-button>
           <el-button
             text
             circle
@@ -176,16 +184,35 @@ watch(
         </div>
       </section>
 
+      <div
+        v-if="speech.enabled && (speech.speaking || speech.activeText || speech.blocked)"
+        class="speech-bar glass"
+      >
+        <span class="speech-dot" :class="{ active: speech.speaking }" />
+        <span class="speech-label">{{ speech.blocked ? '点击播放语音' : '正在朗读' }}</span>
+        <span class="speech-text">{{ speech.activeText }}</span>
+        <el-button v-if="speech.blocked" text size="small" @click="speech.resume()">
+          播放
+        </el-button>
+        <el-button text size="small" @click="speech.stop()">停止</el-button>
+      </div>
+
       <footer class="chat-input glass">
         <el-input
           v-model="input"
           type="textarea"
           :autosize="{ minRows: 1, maxRows: 4 }"
           resize="none"
+          :disabled="chat.loading"
           placeholder="问我课表、课件内容，或者让我排一份复习计划…（Enter 发送，Shift + Enter 换行）"
           @keydown="onKeydown"
         />
-        <el-button type="primary" :icon="Promotion" :disabled="chat.sending" @click="send()">
+        <el-button
+          type="primary"
+          :icon="Promotion"
+          :disabled="chat.sending || chat.loading"
+          @click="send()"
+        >
           发送
         </el-button>
       </footer>
@@ -197,7 +224,7 @@ watch(
           type="primary"
           :icon="Plus"
           class="new-btn"
-          :disabled="chat.creating"
+          :disabled="chat.creating || chat.loading"
           @click="newConversation"
         >
           新建对话
@@ -574,6 +601,51 @@ watch(
 }
 
 /* ---------- 输入区 ---------- */
+.speech-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 38px;
+  padding: 8px 14px;
+  font-size: 12px;
+}
+
+.speech-dot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: #8b5cf6;
+}
+
+.speech-dot.active {
+  animation: speech-pulse 1.1s ease-in-out infinite;
+}
+
+.speech-label {
+  flex-shrink: 0;
+  color: var(--text-muted);
+}
+
+.speech-text {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-main);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@keyframes speech-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(139, 92, 246, 0.5);
+  }
+  50% {
+    box-shadow: 0 0 0 5px rgba(139, 92, 246, 0);
+  }
+}
+
 .chat-input {
   display: flex;
   gap: 12px;

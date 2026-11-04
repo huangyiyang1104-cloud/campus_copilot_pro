@@ -1,6 +1,7 @@
 from fastapi import HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.locks import redis_lock
 from app.models.course import Course
 from app.models.user import User
 from app.repositories.course import CourseRepository
@@ -42,24 +43,27 @@ async def save_courses(
             )
         slots.add(slot)
 
-    await CourseRepository.delete_by_user(session, user.id, SEMESTER)
+    # 同一用户的整表覆盖必须串行：并发 delete + insert 会触发 MySQL 死锁
+    async with redis_lock(f"lock:courses:{user.id}:{SEMESTER}"):
+        await CourseRepository.delete_by_user(session, user.id, SEMESTER)
 
-    for item in items:
-        session.add(
-            Course(
-                user_id=user.id,
-                course_name=item.name,
-                teacher=item.teacher,
-                classroom=item.room,
-                day_of_week=item.day,
-                start_section=item.section * 2 - 1,
-                end_section=item.section * 2,
-                semester=SEMESTER,
-                color=item.color,
+        for item in items:
+            session.add(
+                Course(
+                    user_id=user.id,
+                    course_name=item.name,
+                    teacher=item.teacher,
+                    classroom=item.room,
+                    day_of_week=item.day,
+                    start_section=item.section * 2 - 1,
+                    end_section=item.section * 2,
+                    semester=SEMESTER,
+                    color=item.color,
+                )
             )
-        )
 
-    await session.commit()
+        await session.commit()
 
-    courses = await CourseRepository.list_by_user(session, user.id, SEMESTER)
+        courses = await CourseRepository.list_by_user(session, user.id, SEMESTER)
+
     return [_to_item(course) for course in courses]

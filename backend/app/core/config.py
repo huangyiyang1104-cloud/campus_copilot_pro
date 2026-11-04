@@ -29,6 +29,21 @@ class Settings(BaseSettings):
     DEEPSEEK_BASE_URL: str = "https://api.deepseek.com"
     DEEPSEEK_MODEL: str = "deepseek-flash"
 
+    # 腾讯云 TTS + 本地 RVC
+    TENCENT_SECRET_ID: str = ""
+    TENCENT_SECRET_KEY: str = ""
+    TENCENT_TTS_REGION: str = "ap-guangzhou"
+    TENCENT_TTS_VOICE_TYPE: int = 601009
+    TENCENT_TTS_CODEC: str = "wav"
+    TENCENT_TTS_SAMPLE_RATE: int = 16000
+    TTS_ENABLED: bool = True
+    RVC_ENABLED: bool = True
+    RVC_SERVICE_URL: str = "http://127.0.0.1:8010"
+    RVC_TIMEOUT_SECONDS: int = 60
+
+    # 联网搜索（LangChain TavilySearchResults）
+    TAVILY_API_KEY: str = ""
+
     # 阿里云 OSS
     OSS_ACCESS_KEY_ID: str = ""
     OSS_ACCESS_KEY_SECRET: str = ""

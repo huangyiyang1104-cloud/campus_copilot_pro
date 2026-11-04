@@ -37,6 +37,9 @@ pypdf==6.21.4
 
 # ---------- 工具 ----------
 httpx==0.28.1
+beautifulsoup4==4.15.0
+tavily-python==0.8.5
+tencentcloud-sdk-python-tts==3.1.197
 loguru==0.7.3
 python-jose[cryptography]==3.3.0
 passlib[bcrypt]==1.7.4

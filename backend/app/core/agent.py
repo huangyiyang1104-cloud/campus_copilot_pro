@@ -66,6 +66,21 @@ class ChatAgent:
                 result = await self._run_tool(call["name"], call["args"])
                 messages.append(ToolMessage(content=result, tool_call_id=call["id"]))
 
+        # 工具轮次用完但模型一直在调工具、没有产出正文时，强制做一次无工具总结。
+        # 否则 service 收到的是空字符串，前端只会看到用户消息，像是“没回复”。
+        if not answer:
+            try:
+                final = await self._model.ainvoke(messages)
+                content = final.content
+                if isinstance(content, str) and content.strip():
+                    answer.append(content)
+                    yield content
+            except Exception:
+                logger.exception("工具轮次结束后的最终回答失败")
+
+        if not answer:
+            yield "[平静] 那个……我查到的内容有点乱，一时没整理好。你把具体要问的那一句发我，我按原文帮你对，可以吗？"
+
     async def _run_tool(self, name: str, args: dict) -> str:
         tool = TOOL_MAP.get(name)
         if tool is None:
