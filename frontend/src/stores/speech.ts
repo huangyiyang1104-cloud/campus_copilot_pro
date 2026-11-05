@@ -13,6 +13,9 @@ const TAGS = new Set([
   '开心',
   '害羞',
   '平静',
+  '气喘吁吁',
+  '激动',
+  '低落',
 ])
 
 const ALIASES: Record<string, string> = {
@@ -40,21 +43,39 @@ interface Segment {
   url?: string
 }
 
-const TAG_RE = /^\s*[\[【]([^\]】]+)[\]】]\s*/
+const TAG_ONE_RE = /^\s*[\[【]([^\]】]+)[\]】]\s*/
 const ANY_TAG_RE = /[\[【]([^\]】]+)[\]】]/
 const TAG_WORDS = [...TAGS, ...Object.keys(ALIASES)].join('|')
 const TAG_TAIL_RE = new RegExp(`(?:[\\[【])?(?:${TAG_WORDS})[\\]】]`, 'g')
 const COMPLETE_SENTENCE_RE = /[^。！？!?…\n]+(?:[。！？!?…]+|\n)/g
 
-function normalizeTag(raw: string): string {
+function normalizeTag(raw: string): string | null {
   const value = (ALIASES[raw] ?? raw).trim()
-  return TAGS.has(value) ? value : '平静'
+  return TAGS.has(value) ? value : null
+}
+
+/** 读取句首连续的多个标签，例如 [激动][气喘吁吁] */
+function readLeadingTags(text: string): { tags: string[]; rest: string } {
+  const tags: string[] = []
+  let rest = text
+
+  while (true) {
+    const match = rest.match(TAG_ONE_RE)
+    if (!match || match.index !== 0) break
+    const tag = normalizeTag(match[1])
+    if (tag && !tags.includes(tag)) tags.push(tag)
+    rest = rest.slice(match[0].length)
+  }
+
+  return { tags, rest }
 }
 
 function cleanSpeechText(text: string): string {
   return text
     .replace(ANY_TAG_RE, '')
     .replace(TAG_TAIL_RE, '')
+    // 动作描写只用于文字，不送进 TTS
+    .replace(/（[^）]*）|\([^)]*\)/g, '')
     .replace(/^[\[\]【】\s]+/, '')
     .replace(/\s+/g, ' ')
     .trim()
@@ -68,7 +89,8 @@ export const useSpeechStore = defineStore('speech', () => {
   const blocked = ref(false)
 
   let buffer = ''
-  let currentTag = '平静'
+  let currentTags: string[] = ['平静']
+  let tagGroupOpen = false
   let segments: Segment[] = []
   let playIndex = 0
   let audio: HTMLAudioElement | null = null
@@ -83,9 +105,10 @@ export const useSpeechStore = defineStore('speech', () => {
     segments.push({
       id: nextId++,
       text,
-      tag: currentTag,
+      tag: currentTags.map((tag) => `[${tag}]`).join(''),
       status: 'pending',
     })
+    tagGroupOpen = false
     pump()
   }
 
@@ -112,10 +135,15 @@ export const useSpeechStore = defineStore('speech', () => {
   /** 从流式文本里拆出完整句子；final=true 时把剩余文本也吐出来 */
   function drain(final: boolean) {
     while (buffer.length > 0) {
-      const tagMatch = buffer.match(TAG_RE)
-      if (tagMatch && tagMatch.index === 0) {
-        currentTag = normalizeTag(tagMatch[1])
-        buffer = buffer.slice(tagMatch[0].length)
+      const leading = readLeadingTags(buffer)
+      if (leading.tags.length > 0) {
+        if (tagGroupOpen) {
+          currentTags = [...new Set([...currentTags, ...leading.tags])]
+        } else {
+          currentTags = leading.tags
+        }
+        tagGroupOpen = true
+        buffer = leading.rest
         continue
       }
 
@@ -222,7 +250,8 @@ export const useSpeechStore = defineStore('speech', () => {
     if (!enabled.value) return
     stop()
     buffer = ''
-    currentTag = '平静'
+    currentTags = ['平静']
+    tagGroupOpen = false
     segments = []
     playIndex = 0
     generation += 1

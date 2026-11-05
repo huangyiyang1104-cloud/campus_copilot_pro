@@ -1,13 +1,12 @@
-"""腾讯云 TTS + 本地 RVC 的语音合成适配器。
+"""语音合成适配器。
+
+默认走 GPT-SoVITS V2ProPlus（墨提斯），也保留腾讯云 TTS + RVC 作为旧 provider。
 
 输入是带语气标签的句子，例如：
 
     [紧张地] 那个……我、我查一下。
 
-处理流程：
-  标签解析 -> 文本清洗 -> 腾讯云 TTS -> RVC 变声 -> WAV
-
-标签不会进入 TTS 正文；RVC 不可用时降级返回 TTS 原声。
+GPT-SoVITS 只负责语音合成，不再经过 RVC；标签用于语速等轻量调整。
 """
 
 from __future__ import annotations
@@ -61,6 +60,9 @@ TAG_STYLES: dict[str, SpeechStyle] = {
     "害羞": SpeechStyle("sajiao", 100, -0.1, -2),
     "平静": SpeechStyle("peaceful", 100, 0, 0),
     "生气": SpeechStyle("angry", 100, 0.1, 1),
+    "气喘吁吁": SpeechStyle("neutral", 100, 0.08, 0),
+    "激动": SpeechStyle("happy", 110, 0.1, 0),
+    "低落": SpeechStyle("sad", 100, -0.15, 0),
 }
 
 # 模型偶尔会加“地/地说”，统一成固定标签
@@ -79,6 +81,8 @@ for _alias, _target in _TAG_ALIASES.items():
     TAG_STYLES.setdefault(_alias, TAG_STYLES[_target])
 
 _TAG_RE = re.compile(r"^\s*\[([^\]]+)\]\s*")
+_LEADING_TAGS_RE = re.compile(r"^\s*(?:\[[^\]]+\]\s*)+")
+_TAG_TOKEN_RE = re.compile(r"\[([^\]]+)\]")
 _ANY_TAG_RE = re.compile(r"\[[^\]]+\]")
 _ACTION_RE = re.compile(r"（[^）]*）|\([^)]*\)")
 _URL_RE = re.compile(r"https?://\S+")
@@ -90,14 +94,32 @@ _TAG_WORD_RE = re.compile(
 
 
 def _style_for(tag: str | None, text: str) -> SpeechStyle:
+    """支持 [激动][气喘吁吁] 这种叠加标签，把多个风格合并。"""
+    raw_tags: list[str] = []
     if tag:
-        normalized = tag.strip()
-        if normalized in TAG_STYLES:
-            return TAG_STYLES[normalized]
-    for name, style in TAG_STYLES.items():
-        if f"[{name}]" in text:
-            return style
-    return TAG_STYLES["平静"]
+        raw_tags.extend(_TAG_TOKEN_RE.findall(tag))
+        if not raw_tags:
+            raw_tags.append(tag)
+    raw_tags.extend(_TAG_TOKEN_RE.findall(text or ""))
+
+    styles = [
+        TAG_STYLES[name.strip()]
+        for name in raw_tags
+        if name.strip() in TAG_STYLES
+    ]
+    if not styles:
+        return TAG_STYLES["平静"]
+
+    emotion = next(
+        (style.emotion for style in styles if style.emotion != "neutral"),
+        "neutral",
+    )
+    return SpeechStyle(
+        emotion=emotion,
+        intensity=max(style.intensity for style in styles),
+        speed=max(-0.4, min(0.3, sum(style.speed for style in styles))),
+        volume=max(-6.0, min(4.0, sum(style.volume for style in styles))),
+    )
 
 
 def clean_text(text: str) -> str:
@@ -154,6 +176,45 @@ def _client():
         settings.TENCENT_TTS_REGION,
         client_profile,
     )
+
+
+def _synthesize_gpt_sovits(text: str, style: SpeechStyle) -> bytes:
+    """调用独立运行的 GPT-SoVITS api_v2.py，返回 WAV。"""
+    if not settings.GPT_SOVITS_REF_AUDIO:
+        raise SpeechError("没有配置 GPT_SOVITS_REF_AUDIO")
+    if not settings.GPT_SOVITS_PROMPT_TEXT:
+        raise SpeechError("没有配置 GPT_SOVITS_PROMPT_TEXT")
+
+    speed = max(0.7, min(1.3, settings.GPT_SOVITS_SPEED + style.speed))
+    payload = {
+        "text": text,
+        "text_lang": settings.GPT_SOVITS_TEXT_LANG,
+        "ref_audio_path": settings.GPT_SOVITS_REF_AUDIO,
+        "prompt_text": settings.GPT_SOVITS_PROMPT_TEXT,
+        "prompt_lang": settings.GPT_SOVITS_PROMPT_LANG,
+        "text_split_method": "cut5",
+        "batch_size": 1,
+        "media_type": "wav",
+        "streaming_mode": False,
+        "speed_factor": speed,
+    }
+
+    url = f"{settings.GPT_SOVITS_BASE_URL.rstrip('/')}/tts"
+    try:
+        with httpx.Client(timeout=settings.GPT_SOVITS_TIMEOUT_SECONDS) as client:
+            response = client.post(url, json=payload)
+        if response.status_code != 200:
+            detail = response.text[:300]
+            raise SpeechError(f"GPT-SoVITS 合成失败：HTTP {response.status_code} {detail}")
+        if not response.content:
+            raise SpeechError("GPT-SoVITS 返回空音频")
+        if "audio" not in response.headers.get("content-type", ""):
+            raise SpeechError(f"GPT-SoVITS 返回了非音频内容：{response.text[:200]}")
+        return response.content
+    except SpeechError:
+        raise
+    except Exception as exc:
+        raise SpeechError(f"GPT-SoVITS 服务不可用：{type(exc).__name__}") from exc
 
 
 def _synthesize_chunk(text: str, style: SpeechStyle) -> bytes:
@@ -239,18 +300,22 @@ def synthesize_speech(text: str, tag: str | None = None) -> tuple[bytes, bool]:
     if not settings.TTS_ENABLED:
         raise SpeechError("语音合成未启用")
 
-    match = _TAG_RE.match(text or "")
-    parsed_tag = match.group(1) if match else None
+    match = _LEADING_TAGS_RE.match(text or "")
     body = (text or "")[match.end() :] if match else (text or "")
     body = clean_text(body)
 
     if not body:
         raise SpeechError("没有可朗读的文本")
 
-    style = _style_for(tag or parsed_tag, text)
-    chunks = split_for_tts(body)
+    # tag 参数可以是单个标签，也可以是 "[激动][气喘吁吁]" 这种组合
+    style = _style_for(tag, text)
+    chunks = split_for_tts(body, 300 if settings.TTS_PROVIDER == "gpt_sovits" else MAX_TTS_CHARS)
     if not chunks:
         raise SpeechError("没有可朗读的文本")
+
+    if settings.TTS_PROVIDER == "gpt_sovits":
+        audio_parts = [_synthesize_gpt_sovits(chunk, style) for chunk in chunks]
+        return _concat_wav(audio_parts), False
 
     audio_parts = [_synthesize_chunk(chunk, style) for chunk in chunks]
     wav = _concat_wav(audio_parts)

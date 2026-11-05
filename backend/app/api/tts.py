@@ -3,6 +3,7 @@ import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Response, status
 
 from app.api.deps import get_current_user
+from app.core.config import settings
 from app.core.tts import SpeechError, synthesize_speech
 from app.models.user import User
 from app.schemas.tts import SpeechRequest
@@ -31,5 +32,6 @@ async def speech(
         headers={
             "Cache-Control": "no-store",
             "X-RVC-Used": "1" if used_rvc else "0",
+            "X-TTS-Provider": settings.TTS_PROVIDER,
         },
     )

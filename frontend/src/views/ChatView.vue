@@ -14,6 +14,14 @@ const chat = useChatStore()
 const auth = useAuthStore()
 const speech = useSpeechStore()
 
+// 标签只用于语音合成，不显示在正文里
+const SPEECH_TAG_RE =
+  /\[(?:气喘吁吁|激动|低落|小声|小声地|紧张|紧张地|害怕|害怕地|鼓起勇气|鼓起勇气说|认真|认真地|认真地说|难过|难过地|开心|开心地|害羞|害羞地|平静|平静地|生气)\]\s*/g
+
+function displayContent(content: string): string {
+  return content.replace(SPEECH_TAG_RE, '')
+}
+
 const input = ref('')
 const listRef = ref<HTMLElement | null>(null)
 const historyCollapsed = ref(false)
@@ -170,7 +178,7 @@ onBeforeUnmount(() => speech.stop())
             <template v-if="message.content">
               <MarkdownContent
                 v-if="message.role === 'assistant'"
-                :content="message.content"
+                :content="displayContent(message.content)"
               />
               <p v-else>{{ message.content }}</p>
             </template>

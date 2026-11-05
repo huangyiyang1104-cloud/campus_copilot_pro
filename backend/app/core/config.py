@@ -37,9 +37,19 @@ class Settings(BaseSettings):
     TENCENT_TTS_CODEC: str = "wav"
     TENCENT_TTS_SAMPLE_RATE: int = 16000
     TTS_ENABLED: bool = True
+    TTS_PROVIDER: str = "gpt_sovits"
     RVC_ENABLED: bool = True
     RVC_SERVICE_URL: str = "http://127.0.0.1:8010"
     RVC_TIMEOUT_SECONDS: int = 60
+
+    # GPT-SoVITS V2ProPlus 独立推理服务
+    GPT_SOVITS_BASE_URL: str = "http://127.0.0.1:9880"
+    GPT_SOVITS_REF_AUDIO: str = ""
+    GPT_SOVITS_PROMPT_TEXT: str = ""
+    GPT_SOVITS_PROMPT_LANG: str = "ja"
+    GPT_SOVITS_TEXT_LANG: str = "auto"
+    GPT_SOVITS_SPEED: float = 1.0
+    GPT_SOVITS_TIMEOUT_SECONDS: int = 180
 
     # 联网搜索（LangChain TavilySearchResults）
     TAVILY_API_KEY: str = ""
